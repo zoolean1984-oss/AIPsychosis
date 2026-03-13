@@ -1,0 +1,419 @@
+<style>
+body { font-family: Arial, sans-serif; margin:20px;}
+h1 { margin-bottom:15px;}
+
+.checklist-container{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:10px;
+}
+
+.item{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+button{
+ padding:10px 20px;
+ font-size:16px;
+ margin-top:15px;
+ cursor:pointer;
+color:black;
+}
+
+.modal{
+ display:none;
+ position:fixed;
+ z-index:1000;
+ left:0;
+ top:0;
+ width:100%;
+ height:100%;
+ background:rgba(0,0,0,.5);
+}
+
+.modal-content{
+ background:white;
+ margin:10% auto;
+ padding:20px;
+ border-radius:8px;
+ width:90%;
+ max-width:600px;
+ position:relative;
+}
+
+.close-btn{
+ position:absolute;
+ right:15px;
+ top:10px;
+ font-size:20px;
+ background:none;
+ border:none;
+ cursor:pointer;
+}
+
+.modal div{margin-bottom:6px;font-weight:bold;}
+</style>
+
+
+<p>Select all symptoms that apply. Disorder names appear after submission.</p>
+
+<button id="submitBtn">Diagnose Conditions</button>
+
+<hr>
+
+<div id="checklists" class="checklist-container"></div>
+
+<hr>
+
+<div id="resultsModal" class="modal">
+<div class="modal-content">
+<span style='color:red;'>Please note that this software has not been approved by any medical board and it is always best to consult a trained medical professional </span><hr> <span style='color: green;'>Potential disorders list </span><hr>
+<button class="close-btn" id="closeModal">&times;</button>
+<div id="results"></div>
+</div>
+</div>
+
+<script>
+
+/* ---------------------------
+DISORDER THRESHOLDS
+----------------------------*/
+
+const disorderThresholds={
+"Major Depressive Disorder":5,
+"Persistent Depressive Disorder":3,
+"Bipolar I Disorder":4,
+"Bipolar II Disorder":3,
+"Cyclothymic Disorder":2,
+"Generalized Anxiety Disorder":3,
+"Panic Disorder":2,
+"Social Anxiety Disorder":3,
+"Specific Phobia":2,
+"Agoraphobia":3,
+"PTSD":6,
+"Acute Stress Disorder":5,
+"OCD":2,
+"Body Dysmorphic Disorder":3,
+"Hoarding Disorder":3,
+"Trichotillomania":2,
+"Excoriation Disorder":2,
+"ADHD Inattentive":6,
+"ADHD Hyperactive/Impulsive":6,
+"Autism Spectrum Disorder":2,
+"Borderline Personality Disorder":5,
+"Narcissistic Personality Disorder":5,
+"Obsessive-Compulsive Personality Disorder":4,
+"Schizotypal Personality Disorder":5,
+"Paranoid Personality Disorder":4,
+"Avoidant Personality Disorder":4,
+"Dependent Personality Disorder":5,
+"Antisocial Personality Disorder":3,
+"Histrionic Personality Disorder":5,
+"Schizophrenia":4,
+"Schizoaffective Disorder":3,
+"Brief Psychotic Disorder":1,
+"Delusional Disorder":1,
+"Substance Use Disorder Alcohol":2,
+"Substance Use Disorder Opioids":2,
+"Substance Use Disorder Stimulants":2,
+"Substance Use Disorder Cannabis":2,
+"Substance Use Disorder Tobacco":2,
+"Insomnia Disorder":2,
+"Hypersomnolence Disorder":2,
+"Anorexia Nervosa":3,
+"Bulimia Nervosa":3,
+"Binge-Eating Disorder":3,
+"Grandiose Narcissism":3,
+"Vulnerable Narcissism":3,
+"Psychopathy":4,
+"Machiavellianism":3
+};
+
+/* ---------------------------
+SYMPTOMS (DEDUPLICATED)
+----------------------------*/
+
+const symptoms=[
+
+{symptom:"Persistent sadness",conditions:["Major Depressive Disorder"]},
+{symptom:"Loss of interest",conditions:["Major Depressive Disorder"]},
+{symptom:"Fatigue",conditions:["Major Depressive Disorder","Persistent Depressive Disorder","Generalized Anxiety Disorder"]},
+{symptom:"Sleep disturbance",conditions:["Major Depressive Disorder","Persistent Depressive Disorder","Generalized Anxiety Disorder","Acute Stress Disorder"]},
+{symptom:"Changes in appetite",conditions:["Major Depressive Disorder"]},
+{symptom:"Feelings of worthlessness",conditions:["Major Depressive Disorder"]},
+{symptom:"Difficulty concentrating",conditions:["Major Depressive Disorder","Generalized Anxiety Disorder"]},
+{symptom:"Irritability",conditions:["Major Depressive Disorder","Generalized Anxiety Disorder","PTSD","Acute Stress Disorder"]},
+{symptom:"Suicidal thoughts",conditions:["Major Depressive Disorder"]},
+
+{symptom:"Chronic low mood",conditions:["Persistent Depressive Disorder"]},
+{symptom:"Low self-esteem",conditions:["Persistent Depressive Disorder"]},
+{symptom:"Poor concentration",conditions:["Persistent Depressive Disorder"]},
+{symptom:"Hopelessness",conditions:["Persistent Depressive Disorder"]},
+
+{symptom:"Elevated mood",conditions:["Bipolar I Disorder"]},
+{symptom:"Grandiosity",conditions:["Bipolar I Disorder","Narcissistic Personality Disorder"]},
+{symptom:"Decreased need for sleep",conditions:["Bipolar I Disorder"]},
+{symptom:"Impulsivity",conditions:["Bipolar I Disorder","Borderline Personality Disorder","Antisocial Personality Disorder","Psychopathy"]},
+{symptom:"Racing thoughts",conditions:["Bipolar I Disorder"]},
+{symptom:"Distractibility",conditions:["Bipolar I Disorder"]},
+
+{symptom:"Hypomanic mood",conditions:["Bipolar II Disorder"]},
+{symptom:"Increased energy",conditions:["Bipolar II Disorder"]},
+{symptom:"Impulsive actions",conditions:["Bipolar II Disorder"]},
+{symptom:"Hypersocial behavior",conditions:["Bipolar II Disorder"]},
+
+{symptom:"Mood swings",conditions:["Cyclothymic Disorder"]},
+
+{symptom:"Excessive worry",conditions:["Generalized Anxiety Disorder"]},
+{symptom:"Restlessness",conditions:["Generalized Anxiety Disorder"]},
+{symptom:"Muscle tension",conditions:["Generalized Anxiety Disorder"]},
+
+{symptom:"Sudden panic attacks",conditions:["Panic Disorder"]},
+{symptom:"Heart palpitations",conditions:["Panic Disorder"]},
+{symptom:"Shortness of breath",conditions:["Panic Disorder"]},
+{symptom:"Sweating",conditions:["Panic Disorder","Social Anxiety Disorder"]},
+{symptom:"Trembling",conditions:["Panic Disorder"]},
+{symptom:"Fear of losing control",conditions:["Panic Disorder"]},
+
+{symptom:"Fear of scrutiny",conditions:["Social Anxiety Disorder"]},
+{symptom:"Avoidance of social events",conditions:["Social Anxiety Disorder"]},
+{symptom:"Social embarrassment fear",conditions:["Social Anxiety Disorder"]},
+{symptom:"Blushing",conditions:["Social Anxiety Disorder"]},
+
+{symptom:"Irrational fear",conditions:["Specific Phobia"]},
+{symptom:"Avoidance of trigger",conditions:["Specific Phobia"]},
+{symptom:"Intense anxiety when exposed",conditions:["Specific Phobia"]},
+
+{symptom:"Fear of crowds",conditions:["Agoraphobia"]},
+{symptom:"Fear of public transport",conditions:["Agoraphobia"]},
+{symptom:"Avoidance of open spaces",conditions:["Agoraphobia"]},
+{symptom:"Anxiety when alone",conditions:["Agoraphobia"]},
+
+{symptom:"Flashbacks",conditions:["PTSD"]},
+{symptom:"Nightmares",conditions:["PTSD"]},
+{symptom:"Avoidance of reminders",conditions:["PTSD"]},
+{symptom:"Hypervigilance",conditions:["PTSD"]},
+{symptom:"Negative mood changes",conditions:["PTSD"]},
+{symptom:"Startle response",conditions:["PTSD"]},
+{symptom:"Memory difficulties",conditions:["PTSD"]},
+
+{symptom:"Intrusive memories",conditions:["Acute Stress Disorder"]},
+{symptom:"Dissociation",conditions:["Acute Stress Disorder"]},
+{symptom:"Anxiety",conditions:["Acute Stress Disorder"]},
+{symptom:"Avoidance",conditions:["Acute Stress Disorder"]},
+
+{symptom:"Recurrent obsessions",conditions:["OCD"]},
+{symptom:"Repeated compulsions",conditions:["OCD"]},
+{symptom:"Time-consuming rituals",conditions:["OCD"]},
+{symptom:"Anxiety if prevented",conditions:["OCD"]},
+
+{symptom:"Preoccupation with perceived flaw",conditions:["Body Dysmorphic Disorder"]},
+{symptom:"Repetitive checking",conditions:["Body Dysmorphic Disorder"]},
+{symptom:"Reassurance seeking",conditions:["Body Dysmorphic Disorder"]},
+{symptom:"Avoidance behaviors",conditions:["Body Dysmorphic Disorder"]},
+
+{symptom:"Difficulty discarding items",conditions:["Hoarding Disorder"]},
+{symptom:"Clutter",conditions:["Hoarding Disorder"]},
+{symptom:"Distress when discarding",conditions:["Hoarding Disorder"]},
+{symptom:"Accumulation",conditions:["Hoarding Disorder"]},
+
+{symptom:"Hair pulling",conditions:["Trichotillomania"]},
+{symptom:"Skin picking",conditions:["Excoriation Disorder"]},
+{symptom:"Repeated attempts to stop",conditions:["Trichotillomania","Excoriation Disorder"]},
+
+{symptom:"Careless mistakes",conditions:["ADHD Inattentive"]},
+{symptom:"Difficulty sustaining attention",conditions:["ADHD Inattentive"]},
+{symptom:"Forgetful",conditions:["ADHD Inattentive"]},
+{symptom:"Loses things",conditions:["ADHD Inattentive"]},
+{symptom:"Avoids tasks needing attention",conditions:["ADHD Inattentive"]},
+
+{symptom:"Fidgeting",conditions:["ADHD Hyperactive/Impulsive"]},
+{symptom:"Unable to stay seated",conditions:["ADHD Hyperactive/Impulsive"]},
+{symptom:"Blurts out answers",conditions:["ADHD Hyperactive/Impulsive"]},
+{symptom:"Interrupts others",conditions:["ADHD Hyperactive/Impulsive"]},
+{symptom:"Runs/climbs excessively",conditions:["ADHD Hyperactive/Impulsive"]},
+
+{symptom:"Social communication difficulties",conditions:["Autism Spectrum Disorder"]},
+{symptom:"Restricted/repetitive behaviors",conditions:["Autism Spectrum Disorder"]},
+{symptom:"Sensory sensitivities",conditions:["Autism Spectrum Disorder"]},
+{symptom:"Difficulty with transitions",conditions:["Autism Spectrum Disorder"]},
+
+{symptom:"Fear of abandonment",conditions:["Borderline Personality Disorder"]},
+{symptom:"Unstable relationships",conditions:["Borderline Personality Disorder"]},
+{symptom:"Identity issues",conditions:["Borderline Personality Disorder"]},
+{symptom:"Emotional instability",conditions:["Borderline Personality Disorder"]},
+{symptom:"Self-harm tendencies",conditions:["Borderline Personality Disorder"]},
+
+{symptom:"Need for admiration",conditions:["Narcissistic Personality Disorder","Grandiose Narcissism"]},
+{symptom:"Lack of empathy",conditions:["Narcissistic Personality Disorder"]},
+{symptom:"Sense of entitlement",conditions:["Narcissistic Personality Disorder","Grandiose Narcissism"]},
+{symptom:"Envy of others",conditions:["Narcissistic Personality Disorder"]},
+
+{symptom:"Perfectionism",conditions:["Obsessive-Compulsive Personality Disorder"]},
+{symptom:"Preoccupation with rules",conditions:["Obsessive-Compulsive Personality Disorder"]},
+{symptom:"Rigidity",conditions:["Obsessive-Compulsive Personality Disorder"]},
+{symptom:"Over-conscientiousness",conditions:["Obsessive-Compulsive Personality Disorder"]},
+{symptom:"Reluctance to delegate",conditions:["Obsessive-Compulsive Personality Disorder"]},
+
+{symptom:"Odd beliefs",conditions:["Schizotypal Personality Disorder"]},
+{symptom:"Eccentric behavior",conditions:["Schizotypal Personality Disorder"]},
+{symptom:"Social anxiety",conditions:["Schizotypal Personality Disorder"]},
+{symptom:"Unusual perceptual experiences",conditions:["Schizotypal Personality Disorder"]},
+
+{symptom:"Distrust",conditions:["Paranoid Personality Disorder"]},
+{symptom:"Suspicion",conditions:["Paranoid Personality Disorder"]},
+{symptom:"Reads hidden threats",conditions:["Paranoid Personality Disorder"]},
+{symptom:"Grudges",conditions:["Paranoid Personality Disorder"]},
+
+{symptom:"Avoids social interaction",conditions:["Avoidant Personality Disorder"]},
+{symptom:"Feelings of inadequacy",conditions:["Avoidant Personality Disorder"]},
+{symptom:"Hypersensitive to criticism",conditions:["Avoidant Personality Disorder"]},
+{symptom:"Reluctance to take risks",conditions:["Avoidant Personality Disorder"]},
+
+{symptom:"Difficulty making decisions",conditions:["Dependent Personality Disorder"]},
+{symptom:"Needs reassurance",conditions:["Dependent Personality Disorder"]},
+{symptom:"Fear of separation",conditions:["Dependent Personality Disorder"]},
+{symptom:"Clingy behavior",conditions:["Dependent Personality Disorder"]},
+
+{symptom:"Disregard for norms",conditions:["Antisocial Personality Disorder"]},
+{symptom:"Deceitfulness",conditions:["Antisocial Personality Disorder"]},
+{symptom:"Lack of remorse",conditions:["Antisocial Personality Disorder","Psychopathy"]},
+
+{symptom:"Attention seeking",conditions:["Histrionic Personality Disorder"]},
+{symptom:"Dramatic expression",conditions:["Histrionic Personality Disorder"]},
+{symptom:"Suggestibility",conditions:["Histrionic Personality Disorder"]},
+{symptom:"Shallow emotions",conditions:["Histrionic Personality Disorder"]},
+
+{symptom:"Delusions",conditions:["Schizophrenia","Brief Psychotic Disorder"]},
+{symptom:"Hallucinations",conditions:["Schizophrenia","Brief Psychotic Disorder"]},
+{symptom:"Disorganized speech",conditions:["Schizophrenia"]},
+{symptom:"Negative symptoms",conditions:["Schizophrenia"]},
+{symptom:"Catatonia",conditions:["Schizophrenia"]},
+
+{symptom:"Psychosis",conditions:["Schizoaffective Disorder"]},
+{symptom:"Mood episodes",conditions:["Schizoaffective Disorder"]},
+{symptom:"Mixed symptoms",conditions:["Schizoaffective Disorder"]},
+
+{symptom:"Sudden psychosis",conditions:["Brief Psychotic Disorder"]},
+{symptom:"Fixed delusions",conditions:["Delusional Disorder"]},
+{symptom:"Non-bizarre delusions",conditions:["Delusional Disorder"]},
+
+{symptom:"Craving",conditions:["Substance Use Disorder Alcohol","Substance Use Disorder Opioids","Substance Use Disorder Stimulants","Substance Use Disorder Cannabis","Substance Use Disorder Tobacco"]},
+{symptom:"Loss of control",conditions:["Substance Use Disorder Alcohol"]},
+{symptom:"Withdrawal",conditions:["Substance Use Disorder Opioids","Substance Use Disorder Stimulants","Substance Use Disorder Tobacco"]},
+{symptom:"Withdrawal symptoms",conditions:["Substance Use Disorder Alcohol"]},
+{symptom:"Tolerance",conditions:["Substance Use Disorder Stimulants"]},
+{symptom:"Impaired control",conditions:["Substance Use Disorder Cannabis"]},
+{symptom:"Social problems",conditions:["Substance Use Disorder Cannabis"]},
+{symptom:"Continued use despite harm",conditions:["Substance Use Disorder Alcohol","Substance Use Disorder Opioids"]},
+{symptom:"Continued use",conditions:["Substance Use Disorder Tobacco"]},
+
+{symptom:"Difficulty falling asleep",conditions:["Insomnia Disorder"]},
+{symptom:"Difficulty staying asleep",conditions:["Insomnia Disorder"]},
+{symptom:"Daytime fatigue",conditions:["Insomnia Disorder"]},
+
+{symptom:"Excessive sleep",conditions:["Hypersomnolence Disorder"]},
+{symptom:"Non-restorative sleep",conditions:["Hypersomnolence Disorder"]},
+{symptom:"Daytime sleepiness",conditions:["Hypersomnolence Disorder"]},
+
+{symptom:"Restriction of intake",conditions:["Anorexia Nervosa"]},
+{symptom:"Fear of gaining weight",conditions:["Anorexia Nervosa"]},
+{symptom:"Body image disturbance",conditions:["Anorexia Nervosa"]},
+
+{symptom:"Recurrent binge eating",conditions:["Bulimia Nervosa"]},
+{symptom:"Compensatory behaviors",conditions:["Bulimia Nervosa"]},
+{symptom:"Body shame",conditions:["Bulimia Nervosa"]},
+
+{symptom:"Binge episodes",conditions:["Binge-Eating Disorder"]},
+{symptom:"Eating rapidly",conditions:["Binge-Eating Disorder"]},
+{symptom:"Eating until uncomfortable",conditions:["Binge-Eating Disorder"]},
+
+{symptom:"Exaggerated self-importance",conditions:["Grandiose Narcissism"]},
+{symptom:"Exploitativeness",conditions:["Grandiose Narcissism"]},
+
+{symptom:"Hypersensitivity to criticism",conditions:["Vulnerable Narcissism"]},
+{symptom:"Shame and insecurity",conditions:["Vulnerable Narcissism"]},
+{symptom:"Social withdrawal",conditions:["Vulnerable Narcissism"]},
+
+{symptom:"Callousness",conditions:["Psychopathy"]},
+{symptom:"Manipulativeness",conditions:["Psychopathy"]},
+
+{symptom:"Strategic manipulation",conditions:["Machiavellianism"]},
+{symptom:"Cynicism",conditions:["Machiavellianism"]},
+{symptom:"Deceptiveness",conditions:["Machiavellianism"]}
+
+];
+
+/* ---------------------------
+UI RENDER
+----------------------------*/
+
+const container=document.getElementById("checklists");
+
+symptoms.forEach((s,i)=>{
+ const div=document.createElement("div");
+ div.className="item";
+
+ const cb=document.createElement("input");
+ cb.type="checkbox";
+ cb.id="sym"+i;
+
+ const label=document.createElement("label");
+ label.htmlFor=cb.id;
+ label.textContent=s.symptom;
+
+ div.appendChild(cb);
+ div.appendChild(label);
+ container.appendChild(div);
+});
+
+/* ---------------------------
+EVALUATION
+----------------------------*/
+
+document.getElementById("submitBtn").onclick=()=>{
+
+const counts={};
+
+Object.keys(disorderThresholds).forEach(d=>counts[d]=0);
+
+symptoms.forEach((s,i)=>{
+ if(document.getElementById("sym"+i).checked){
+  s.conditions.forEach(c=>{
+    counts[c]++
+  })
+ }
+});
+
+const results=document.getElementById("results");
+results.innerHTML="";
+
+Object.entries(counts).forEach(([d,c])=>{
+ if(c>=disorderThresholds[d]){
+   results.innerHTML+=`<div>${d} </div>`;
+ }
+});
+
+if(results.innerHTML===""){
+ results.textContent="No disorder thresholds met.";
+}
+
+document.getElementById("resultsModal").style.display="block";
+
+};
+
+document.getElementById("closeModal").onclick=()=>{
+
+document.getElementById("resultsModal").style.display="none"
+
+};
+
+window.onclick=e=>{
+ if(e.target==document.getElementById("resultsModal")){
+  document.getElementById("resultsModal").style.display="none"
+ }
+};
+
+</script>
